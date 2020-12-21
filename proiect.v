@@ -52,7 +52,7 @@ Inductive BExp :=
 
 (* Statements *)
 Inductive Stmt :=
-  | var_decl: string -> Stmt (* declaratie pentru variabile de tip nat *)
+  | var_decl: string -> Stmt (* declaratie pentru variabile *)
   | nat_assign : string -> AExp -> Stmt (* Assignment  pentru variabile de tip nat *)
   | bool_assign : string -> BExp -> Stmt (* Assignment pentru variabile de tip bool *)
   | sequence : Stmt -> Stmt -> Stmt
@@ -154,11 +154,11 @@ Definition EnvMem := string -> Mem.
 Definition MemLayer := Mem -> Values.
 
 (* Stack cu environmente pt a putea pastra valorile diferite ale variabilelor locale/globale*)
-Definition Stack := list Env.
+Definition Env_Stack := list Env.
 
 (* Initial, fiecare variabila are asignata o zona de memorie default *)
 Definition MemDefault : EnvMem := fun x => mem_default.
-  
+   
 Compute (MemDefault "z"). (* Variabila nu e inca declarta *)
 
 (* fiecare variabila are initial asignata o valoare nedeclarata *)
@@ -173,6 +173,8 @@ Definition update_env (env: EnvMem) (x: string) (n: Mem) : EnvMem :=
         (env y).
 
 Definition envMem : EnvMem := fun x => mem_default.
+
+Compute ((update_env envMem "x" (offset 9)) "x").
 
 (*Definition getOffset : string -> Mem  := fun x => EnvMem. *)
 
@@ -200,7 +202,7 @@ Definition EnvVect := Vector -> Vec_Type.
 
 (* Initial, vectorii sunt nedeclarati in environment *)
 Definition envVect : EnvVect := fun x => undecl_vec.
-
+ 
 Check( "x" [10]).
 
 (*Check("x" [ 1 ] = (val_nat 5)). *)
@@ -229,7 +231,7 @@ Notation " 'swap' (a,b) " := (Swap a b) (at level 80).
 (*
 Fixpoint Sort ( envv: EnvVect ) (vect : Vector) : Vector :=
   fun y =>
-    if (
+
 
  aici veific daca vectorul meu nu este gol si daca are mai mult de o valoare 
 retinuta in el
