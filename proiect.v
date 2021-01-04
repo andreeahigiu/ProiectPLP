@@ -137,8 +137,8 @@ Inductive Stmt :=
   | nat_decl: string -> Stmt
   | bool_decl: string ->Stmt
   | vector_decl: Vector ->Stmt
-  | add_nat_vect: string -> nat -> nat ->Stmt
-  | add_bool_vect: string -> nat -> bool ->Stmt
+  | add_nat_vect: string -> nat -> AExp ->Stmt
+  | add_bool_vect: string -> nat -> BExp ->Stmt
   | nat_assign : string -> AExp -> Stmt (* Assignment  pentru variabile de tip nat *)
   | bool_assign : string -> BExp -> Stmt (* Assignment pentru variabile de tip bool *)
   | sequence : Stmt -> Stmt -> Stmt
@@ -170,32 +170,32 @@ Notation "X <b= A" := (bool_assign X A)(at level 60).
 Notation "'LetVar' X " := (var_decl X )(at level 60).
 Notation "'LetNat' X " := (nat_decl X )(at level 60).
 Notation "'LetBool' X " := (bool_decl X )(at level 60).
-Notation "X 'DecNat' i" := (nat_decl_assign X i)(at level 60).
-Notation "X 'DecBool' i" := (bool_decl_assign X i)(at level 60).
-Notation "X [ i ] <n= B" := (add_nat_vect X i B) (at level 60).
-Notation "X [ i ] <b= B" := (add_bool_vect X i B) (at level 60).
+Notation "X 'DecNat=' i" := (nat_decl_assign X i)(at level 60).
+Notation "X 'DecBool=' i" := (bool_decl_assign X i)(at level 60).
+Notation "X [ i ] <nv= B" := (add_nat_vect X i B) (at level 60).
+Notation "X [ i ] <bv= B" := (add_bool_vect X i B) (at level 60).
 Notation "S1 ;; S2" := (sequence S1 S2) (at level 93, right associativity).
 Notation "'forr' ( A ; B ; C ) { S }" := (A ;; while B ( S ;; C )) (at level 97).
 Notation "'iff' ( A ) 'thenn' ( B ) 'elsee' ( C )" := (ifthenelse A B C)(at level 97).
-
+Notation "'whilee' ( A ) { B }" := (while A B)(at level 97).
 
 (*Coercions pentru constante si variabile*)
 
 Coercion anum : TypeNat >-> AExp.
 Coercion avar : string >-> AExp. 
 Coercion bvar : string >->BExp.
-
-
+Coercion vector_decl : Vector >-> Stmt.
+Coercion var_decl : string >-> Stmt.
 
 (*-----------------------------Exemple-----------------------------*)
 
 
-Check("m" [ 5 ] <n= 7).
-Check("m" [ 5 ] <b= false).
+Check("m" [ 5 ] <nv= 7).
+Check("m" [ 5 ] <bv= bfalse).
  
 Check( LetVar "x").
 Check (LetNat "x").
-Check("d" DecNat 5).
+Check("d" DecNat= 5).
 
 Check ( "x" <n= (anum 5)).
 Check ( "y" <b= btrue).
@@ -221,6 +221,14 @@ Check btrue.
 Check bfalse.
 Check !' ("x" <' 10).
 Check btrue &&' ("n" >' 0).
+
+Check (
+"a" [20] ;;
+"cont" DecNat= 0 ;;
+whilee ( "cont" <' 10) 
+{ "a" [2] <nv= "cont" ;; "cont" <n= "cont" +' 1 }
+).
+
 
 Check (
 LetNat "sum" ;;
@@ -438,8 +446,6 @@ Inductive beval : BExp -> Env -> TypeBool -> Prop :=
     b = (or_Bool i1 i2) ->
     (a1 ||' a2) ={ sigma }=> b 
 where "B ={ S }=> B'" := (beval B S B').
-
-
 
 
 
