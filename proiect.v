@@ -194,8 +194,32 @@ Check( "x" [10]).
 
 (*Check("x" [ 1 ] = (val_nat 5)).  *)
 
+(*Update pentru vectori*)
+(*
+Fixpoint update_next_vector : ( m : Memory) ( mem: MemLayer) (gas : nat): Memory:=
+match gas with
+  | 0 => m
+  | S gas' => match m with
+            | mem_default => mem_default
+            | offset x => match (mem (offset m)) with
+                          | val_undecl => offset(m-1)
+                           val_nat p => (poz_valabil (offset(a+1)
+*) 
+
+(*update_env pentru vectori *)
+ 
+Fixpoint update_env_vector (env: EnvMem) (x: string) (m: nat) (n: Mem) : EnvMem :=
+match m with 
+| 0 => env
+| S m' => match n with
+           | mem_default => env
+           | offset of => (update_env_vector (update_env env x (offset (of+m'))) x m' (offset(of+1))) 
+           end
+end.
 
 
+
+Compute ((update_env_vector env "x" 9 (offset 6)) "x").
 
 (* Statements *)
 Inductive Stmt :=
@@ -246,6 +270,19 @@ Notation "S1 ;; S2" := (sequence S1 S2) (at level 93, right associativity).
 Notation "'forr' ( A ; B ; C ) { S }" := (A ;; while B ( S ;; C )) (at level 97).
 Notation "'iff' ( A ) 'thenn' ( B ) 'elsee' ( C )" := (ifthenelse A B C)(at level 97).
 Notation "'whilee' ( A ) { B }" := (while A B)(at level 97).
+
+
+
+
+(* Configuration 
+Inductive Config :=
+   nat: last memory zone
+     Env: environment
+     MemLayer: memory layer
+     Stack: stack 
+  
+  | config : nat -> Env -> MemLayer -> Stack -> Config.*)
+
 
 (*Coercions pentru constante si variabile*)
 
@@ -316,10 +353,10 @@ elsee  ( "sum" <n= 2)
 (*Environments*)
 
 (*Environment ce face legatura intre numele variabilelor si tipul acestora*)
-Definition Env := string -> Values.
+Definition EnvValues := string -> Values.
 
 (* Initial, toate variabilele sunt undeclared in environment *)
-Definition env : Env := fun x => var_undecl.
+Definition envValues : EnvValues := fun x => var_undecl.
 
 
 Definition types_compatibility (t1 : Values) (t2 : Values) : bool :=
@@ -381,14 +418,13 @@ retinuta in el
 
 
 (* Notatations used for the Big-Step semantics *)
-Reserved Notation "A =[ S ]=> N" (at level 60).
+Reserved Notation "A =[ S , T ]=> N" (at level 30).
 Reserved Notation "B ={ S }=> B'" (at level 70).
  
 Definition plus_Nat (n1 n2 : TypeNat) : TypeNat :=
   match n1, n2 with 
     | error_nat, _ => error_nat
     | _, error_nat => error_nat 
-    | natural, natural => natural
     | num v1, num v2 => num (v1 + v2)
     end.
 
@@ -396,7 +432,6 @@ Definition sub_Nat (n1 n2 : TypeNat) : TypeNat :=
   match n1, n2 with
     | error_nat, _ => error_nat
     | _, error_nat => error_nat
-    | natural, natural => natural
     | num n1, num n2 => if Nat.ltb n1 n2
                         then error_nat
                         else num (n1 - n2)
@@ -406,7 +441,6 @@ Definition mul_Nat (n1 n2 : TypeNat) : TypeNat :=
   match n1, n2 with
     | error_nat, _ => error_nat
     | _, error_nat => error_nat
-    | natural, natural => natural
     | num v1, num v2 => num (v1 * v2)
     end.
 
@@ -415,7 +449,6 @@ Definition div_Nat (n1 n2 : TypeNat) : TypeNat :=
     | error_nat, _ => error_nat
     | _, error_nat => error_nat
     | _, num 0 => error_nat
-    | natural, natural => natural
     | num v1, num v2 => num (Nat.div v1 v2)
     end.
 
@@ -423,45 +456,55 @@ Definition mod_Nat (n1 n2 : TypeNat) : TypeNat :=
   match n1, n2 with
     | error_nat, _ => error_nat
     | _, error_nat => error_nat
-    | natural, natural => natural
     | _, num 0 => error_nat
     | num v1, num v2 => num (v1 - v2 * (Nat.div v1 v2))
-    end.
-
+    end. 
+   
 (* Big-Step semantics for arithmetic operations *)
-Inductive aeval : AExp -> Env -> TypeNat -> Prop :=
-| const : forall n sigma, anum n =[ sigma ]=> n
-| var : forall v sigma, avar v =[ sigma ]=>  match (sigma v) with
+Inductive aeval : AExp -> EnvMem -> MemLayer -> TypeNat -> Prop :=
+| const : forall n sigma phi, anum n =[ sigma , phi ]=> n
+| var : forall v sigma phi, avar v =[ sigma , phi ]=>  match (phi (sigma v)) with
                                               | val_nat x => x
                                               | _ => error_nat
                                               end
-| add : forall a1 a2 i1 i2 sigma n,
-    a1 =[ sigma ]=> i1 ->
-    a2 =[ sigma ]=> i2 ->
+| add : forall a1 a2 i1 i2 sigma phi n,
+    a1 =[ sigma , phi ]=> i1 ->
+    a2 =[ sigma , phi ]=> i2 ->
     n = (plus_Nat i1 i2) ->
-    a1 +' a2 =[sigma]=> n
-| multiplic : forall a1 a2 i1 i2 sigma n,
-    a1 =[ sigma ]=> i1 ->
-    a2 =[ sigma ]=> i2 ->
+    (a1 +' a2) =[ sigma , phi ]=> n
+| multiplic : forall a1 a2 i1 i2 sigma phi n,
+    a1 =[ sigma , phi ]=> i1 ->
+    a2 =[ sigma , phi ]=> i2 ->
     n = (mul_Nat i1 i2) ->
-    a1 *' a2 =[sigma]=> n
-| substract : forall a1 a2 i1 i2 sigma n,
-    a1 =[ sigma ]=> i1 ->
-    a2 =[ sigma ]=> i2 ->
+    (a1 *' a2) =[ sigma , phi ]=> n
+| substract : forall a1 a2 i1 i2 sigma phi n,
+    a1 =[ sigma , phi ]=> i1 ->
+    a2 =[ sigma , phi ]=> i2 ->
     n = (sub_Nat i1 i2) ->
-    a1 -' a2 =[sigma]=> n
-| division : forall a1 a2 i1 i2 sigma n,
-    a1 =[ sigma ]=> i1 ->
-    a2 =[ sigma ]=> i2 ->
+    (a1 -' a2) =[ sigma , phi ]=> n
+| division : forall a1 a2 i1 i2 sigma phi n,
+    a1 =[ sigma , phi ]=> i1 ->
+    a2 =[ sigma , phi ]=> i2 ->
     n = (div_Nat  i1 i2) ->
-    a1 /' a2 =[sigma]=> n
-| modulo : forall a1 a2 i1 i2 sigma n,
-    a1 =[ sigma ]=> i1 ->
-    a2 =[ sigma ]=> i2 ->
+    (a1 /' a2) =[ sigma , phi ]=> n
+| modulo : forall a1 a2 i1 i2 sigma phi n,
+    a1 =[ sigma , phi ]=> i1 ->
+    a2 =[ sigma , phi ]=> i2 ->
     n = (mod_Nat i1 i2) ->
-    a1 %'f a2 =[sigma]=> n
-where "a =[ sigma ]=> n" := (aeval a sigma n).
+    (a1 %' a2) =[ sigma , phi ]=> n
+| s_to_val : forall s sigma phi,
+             avar s =[ sigma , phi ]=> match (phi (sigma s)) with
+                                   | val_nat s => s
+                                   | _ => error_nat
+                                   end
+where "a =[ sigma , phi ]=> n" := (aeval a sigma phi n).
 
+Compute ((update_env env "x" (offset 9)) "x").
+Compute ((update_mem mlayer (offset 9) (val_nat 5)) (offset 9)).
+
+Example ex0 : "x" =[ env , mlayer ]=> 5.
+Proof.
+ .
 
 
 Definition lt_Bool (n1 n2 : TypeNat) : TypeBool :=
