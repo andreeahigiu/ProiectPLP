@@ -13,6 +13,8 @@ Inductive TypeNat :=
   | num : nat -> TypeNat
   | error_nat :TypeNat.
 
+Scheme Equality for TypeNat.
+
 Inductive TypeBool :=
   | boolean : bool -> TypeBool
   | error_bool : TypeBool.
@@ -23,9 +25,12 @@ Coercion boolean: bool >-> TypeBool.
 
 Inductive Values :=
   | var_undecl : Values
+  | var_assign : Values
   | default : Values
   | val_nat : TypeNat -> Values
   | val_bool : TypeBool -> Values.
+
+Scheme Equality for Values.
 
 (*Expresii aritmetice*)
 Inductive AExp :=
@@ -61,7 +66,7 @@ Definition EnvLocal := Values.
 Inductive Mem :=
   | mem_default : Mem
   | offset : nat -> Mem. (* offset which indicates the current number of memory zones *)
-
+ 
 Scheme Equality for Mem.
 
 (* Environment *)
@@ -69,6 +74,7 @@ Definition EnvMem := string -> Mem.
 
 (* Memoria *)
 Definition MemLayer := Mem -> Values.
+
 
 
 (* Stack cu environmente pt a putea pastra valorile diferite ale variabilelor locale/globale*)
@@ -89,19 +95,81 @@ Definition update_env (env: EnvMem) (x: string) (n: Mem) : EnvMem :=
       then
         n
       else
+        (env y). 
+
+
+Inductive Types :=
+  | naturalType : Types
+  | booleanType : Types
+  | natural_vecType : Types
+  | boolean_vecType : Types.
+Scheme Equality for Types.
+
+(*
+Definition envMemAlloc : EnvMem := fun x => offset.
+*)
+Definition MemNat := Mem -> Types.
+Definition envNat : MemNat := fun x => naturalType.
+
+Compute ((update_env MemDefault "x" (offset 9)) "x").
+Compute (MemDefault "x").
+
+(*
+Definition update_mem (env: MemNat) (offset: Mem) (n: Types) : MemNat :=
+  fun y =>
+      if (andb (Mem_beq offset y ) (Types_beq n (env y))) (* *)
+      then
+        n
+      else
         (env y).
 
-Definition envMem : EnvMem := fun x => mem_default.
 
-Compute ((update_env envMem "x" (offset 9)) "x").
+Compute (( update_mem  envNat (offset 9) naturalType) (offset 9)).
+*)
+(*
+Compute (( update_mem  envNat (offset 9) (num 15)) (offset 9)). 
+*)
 
-(*Definition getOffset : string -> Mem  := fun x => EnvMem. *)
+Definition Env := string -> Mem.
+
+
+
+Definition mlayer : MemLayer := fun x => var_undecl.
+
+Definition env : Env := fun x => mem_default.
+
+
+
+Compute (env "z"). (* The variable is not yet declared *)
+
+(* Example of updating the environment, based on a specific memory offset *)
+Compute ((update_env env "x" (offset 9)) "x").
+
+
+Definition update_mem (layer: MemLayer) (x: Mem) (n: Values) : MemLayer :=
+  fun y =>
+    if( andb (Mem_beq x y) (Values_beq n (layer y)) ) (*sunt egale adresele si value diferit*)
+    then
+       (layer y)
+    else
+      n.
+
+Compute ((update_mem mlayer (offset 9) (val_nat 5)) (offset 9)).
+
+
 
 (*-------------------------------Vectori----------------------------*)
+
 
 Inductive Vector :=
   | vec_decl : string -> nat -> Vector
   | vec_assign : string -> nat -> Values -> Vector.
+
+Inductive Tipuri :=
+  | vect : Vector -> Tipuri
+  | variable : string -> Tipuri.
+
+Definition VecMem := nat -> Mem. (* env pentru a retine in memorie marimea vectorului*)
 
 Inductive Alloc_Vector :=
   | alloc_name : string -> Mem -> Alloc_Vector
@@ -234,10 +302,8 @@ Check (
 LetNat "sum" ;;
 LetBool "ok" ;;
 "sum" <n= 10 ;;
-
 ( forr ( "i" <n= 0 ; "i" <' 10 ; "i" <n= "i" +' 1 )
              { "sum" <n= "sum" +' "i" } )
-
 ;;
 iff ("sum" *' 2 >' 50)
 thenn ( "sum" <n= 1 ;; "ok" <b= btrue)
@@ -262,6 +328,10 @@ Definition types_compatibility (t1 : Values) (t2 : Values) : bool :=
                      | var_undecl => true
                      | _ => false
                      end
+    | var_assign => match t2 with
+                     | var_assign => true
+                     | _ => false
+                    end
     | default => match t2 with 
                      | default => true
                      | _ => false
@@ -313,11 +383,12 @@ retinuta in el
 (* Notatations used for the Big-Step semantics *)
 Reserved Notation "A =[ S ]=> N" (at level 60).
 Reserved Notation "B ={ S }=> B'" (at level 70).
-
+ 
 Definition plus_Nat (n1 n2 : TypeNat) : TypeNat :=
   match n1, n2 with 
     | error_nat, _ => error_nat
-    | _, error_nat => error_nat
+    | _, error_nat => error_nat 
+    | natural, natural => natural
     | num v1, num v2 => num (v1 + v2)
     end.
 
@@ -325,6 +396,7 @@ Definition sub_Nat (n1 n2 : TypeNat) : TypeNat :=
   match n1, n2 with
     | error_nat, _ => error_nat
     | _, error_nat => error_nat
+    | natural, natural => natural
     | num n1, num n2 => if Nat.ltb n1 n2
                         then error_nat
                         else num (n1 - n2)
@@ -334,6 +406,7 @@ Definition mul_Nat (n1 n2 : TypeNat) : TypeNat :=
   match n1, n2 with
     | error_nat, _ => error_nat
     | _, error_nat => error_nat
+    | natural, natural => natural
     | num v1, num v2 => num (v1 * v2)
     end.
 
@@ -342,6 +415,7 @@ Definition div_Nat (n1 n2 : TypeNat) : TypeNat :=
     | error_nat, _ => error_nat
     | _, error_nat => error_nat
     | _, num 0 => error_nat
+    | natural, natural => natural
     | num v1, num v2 => num (Nat.div v1 v2)
     end.
 
@@ -349,6 +423,7 @@ Definition mod_Nat (n1 n2 : TypeNat) : TypeNat :=
   match n1, n2 with
     | error_nat, _ => error_nat
     | _, error_nat => error_nat
+    | natural, natural => natural
     | _, num 0 => error_nat
     | num v1, num v2 => num (v1 - v2 * (Nat.div v1 v2))
     end.
@@ -384,7 +459,7 @@ Inductive aeval : AExp -> Env -> TypeNat -> Prop :=
     a1 =[ sigma ]=> i1 ->
     a2 =[ sigma ]=> i2 ->
     n = (mod_Nat i1 i2) ->
-    a1 %' a2 =[sigma]=> n
+    a1 %'f a2 =[sigma]=> n
 where "a =[ sigma ]=> n" := (aeval a sigma n).
 
 
@@ -448,6 +523,94 @@ Inductive beval : BExp -> Env -> TypeBool -> Prop :=
 where "B ={ S }=> B'" := (beval B S B').
 
 
+Example substract_error : 1 -' 5 =[ env ]=> error_nat.
+Proof.
+  eapply substract.
+  - apply const.
+  - apply const.
+  - simpl. reflexivity.
+Qed.
+
+Example boolean_operation : bnot (100 <' "n") ={ env }=> error_bool.
+Proof.
+  eapply b_not.
+  eapply b_lessthan.
+  - eapply const.
+  - eapply var.
+  - simpl. reflexivity.
+  - simpl. reflexivity.
+Qed. 
+
+
+Definition update (env : Env) (x : string) (v : Values) : Env :=
+ fun y =>
+    if (eqb y x)  (*daca variabila x se gaseste prin environment, atunci updatez, daca nu, ramane la fel environmentul*)
+    then
+       (*variabila nu a fost declarata inca si valoarea pe care vreau sa o atribui nu e default*)
+       if(andb (types_compatibility var_undecl (env y)) (negb (types_compatibility default v)))
+        then var_undecl
+       else
+        (*variabila a fost doar declarata, acum avand tipul default si val de atribuit e tot default*)
+          if(andb (types_compatibility var_undecl (env y)) (types_compatibility default v))
+            then default
+          else
+              if(orb (types_compatibility default (env y)) (types_compatibility v (env y)))
+                then v
+              else var_assign (*daca valoarea de asignat nu are acelasi tip ca variabila*)
+    else (env y).
+ 
+
+Reserved Notation "S -{ Sigma }-> Sigma'" (at level 60).
+ 
+Inductive eval : Stmt -> Env -> Env -> Prop :=
+| e_nat_decl: forall a i x sigma sigma',
+   a =[ sigma ]=> i ->
+   sigma' = (update sigma x (val_nat i)) ->
+   (x <n= a) -{ sigma }-> sigma'
+| e_nat_assign: forall a i x sigma sigma',
+    a =[ sigma ]=> i ->
+    sigma' = (update sigma x (val_nat i)) ->
+    (x <n= a) -{ sigma }-> sigma'
+| e_bool_decl: forall a i x sigma sigma', 
+   a ={ sigma }=> i ->
+   sigma' = (update sigma x (val_bool i)) ->
+   (x <b= a) -{ sigma }-> sigma'
+| e_bool_assign: forall a i x sigma sigma',
+    a ={ sigma }=> i ->
+    sigma' = (update sigma x (val_bool i)) ->
+    (x <b= a) -{ sigma }-> sigma'
+|e_nat_decl_assign: forall a i x sigma sigma',
+    a =[sigma]=> i ->
+    sigma' = (update sigma x (val_nat i)) ->
+    (x <n= a) -{sigma }-> sigma'
+
+| e_vector_decl: forall v i x sigma sigma',
+    v =[sigma]=> i ->
+    sigma' = (update sigma x (val_nat i)) ->
+    (x <n= v) -{sigma}-> sigma'
+
+| e_seq : forall s1 s2 sigma sigma1 sigma2,
+    s1 -{ sigma }-> sigma1 ->
+    s2 -{ sigma1 }-> sigma2 ->
+    (s1 ;; s2) -{ sigma }-> sigma2
+| e_if_then : forall b s sigma,
+    ifthen b s -{ sigma }-> sigma
+| e_if_then_elsetrue : forall b s1 s2 sigma sigma',
+    b ={ sigma }=> true ->
+    s1 -{ sigma }-> sigma' ->
+    ifthenelse b s1 s2 -{ sigma }-> sigma' 
+| e_if_then_elsefalse : forall b s1 s2 sigma sigma',
+    b ={ sigma }=> false ->
+    s2 -{ sigma }-> sigma' ->
+    ifthenelse b s1 s2 -{ sigma }-> sigma' 
+| e_whilefalse : forall b s sigma,
+    b ={ sigma }=> false ->
+    while b s -{ sigma }-> sigma
+| e_whiletrue : forall b s sigma sigma',
+    b ={ sigma }=> true ->
+    (s ;; while b s) -{ sigma }-> sigma' ->
+    while b s -{ sigma }-> sigma'
+where "s -{ sigma }-> sigma'" := (eval s sigma sigma').
 
 
 
