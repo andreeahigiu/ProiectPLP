@@ -115,25 +115,8 @@ Definition envNat : MemNat := fun x => naturalType.
 Compute ((update_env MemDefault "x" (offset 9)) "x").
 Compute (MemDefault "x").
 
-(*
-Definition update_mem (env: MemNat) (offset: Mem) (n: Types) : MemNat :=
-  fun y =>
-      if (andb (Mem_beq offset y ) (Types_beq n (env y))) (* *)
-      then
-        n
-      else
-        (env y).
-
-
-Compute (( update_mem  envNat (offset 9) naturalType) (offset 9)).
-*)
-(*
-Compute (( update_mem  envNat (offset 9) (num 15)) (offset 9)). 
-*)
 
 Definition Env := string -> Mem.
-
-
 
 Definition mlayer : MemLayer := fun x => var_undecl.
 
@@ -141,11 +124,13 @@ Definition env : Env := fun x => mem_default.
 
 
 
-Compute (env "z"). (* The variable is not yet declared *)
+Compute (env "z"). (* Variabila nu e inca declarata *)
+Compute ( env "x"). 
 
-(* Example of updating the environment, based on a specific memory offset *)
-Compute ((update_env env "x" (offset 9)) "x").
+(* Examplu de update la memorie in functie de un offset *)
+Compute ((update_env env "x" (offset 2)) "x").
 
+Compute ((update_env env "z" (offset 5)) "z").
 
 Definition update_mem (layer: MemLayer) (x: Mem) (n: Values) : MemLayer :=
   fun y =>
@@ -155,8 +140,8 @@ Definition update_mem (layer: MemLayer) (x: Mem) (n: Values) : MemLayer :=
     else
       n.
 
-Compute ((update_mem mlayer (offset 9) (val_nat 5)) (offset 9)).
-
+Compute ((update_mem mlayer (offset 3) (val_nat 5)) (offset 3)).
+Compute ((update_mem mlayer (offset 4) (val_nat 29)) (offset 4)).
 
 
 (*-------------------------------Vectori----------------------------*)
@@ -193,21 +178,7 @@ Definition envVect : EnvVect := fun x => undecl_vec.
  
 Check( "x" [10]). 
 
-(*Check("x" [ 1 ] = (val_nat 5)).  *)
-
-(*Update pentru vectori*)
-(*
-Fixpoint update_next_vector : ( m : Memory) ( mem: MemLayer) (gas : nat): Memory:=
-match gas with
-  | 0 => m
-  | S gas' => match m with
-            | mem_default => mem_default
-            | offset x => match (mem (offset m)) with
-                          | val_undecl => offset(m-1)
-                           val_nat p => (poz_valabil (offset(a+1)
-*) 
-
-(*update_env pentru vectori *)
+(*update_env pentru vectori: imi incrementez offsetul astfel incat sa am loc in memorie cat dimensiunea vectorului  *)
  
 Fixpoint update_env_vector (env: EnvMem) (x: string) (m: nat) (n: Mem) : EnvMem :=
 match m with 
@@ -218,15 +189,14 @@ match m with
            end
 end.
 
-
-
 Compute ((update_env_vector env "x" 9 (offset 6)) "x").
+Compute ((update_env_vector env "y" 10 (offset 15)) "x").
 
 (* Statements *)
 Inductive Stmt :=
   | var_decl: string -> Stmt (* declaratie pentru variabile *)
-  | nat_decl_assign: string -> nat -> Stmt
-  | bool_decl_assign: string -> bool ->Stmt
+  | nat_decl_assign: string -> AExp -> Stmt
+  | bool_decl_assign: string -> BExp ->Stmt
   | nat_decl: string -> Stmt
   | bool_decl: string ->Stmt
   | vector_decl: Vector ->Stmt
@@ -283,7 +253,7 @@ Inductive Config :=
      MemLayer: memory layer
      Stack: stack 
   
-  | config : nat -> Env -> MemLayer -> Stack -> Config.*)
+  | config : nat -> Env -> MemLayer -> Config.*)
 
 
 (*Coercions pentru constante si variabile*)
@@ -387,37 +357,11 @@ Definition types_compatibility (t1 : Values) (t2 : Values) : bool :=
 
   end. 
 
-
-
-
-(*---------------------------Functia de Swap----------------------------*)
+Compute (types_compatibility (val_nat 5) (val_nat 8)).
+Compute (types_compatibility (val_nat 5) (val_bool true)).
+Compute (types_compatibility default (val_nat 118)).
 
 Compute (MemDefault "x").
-(*
-Definition Swap (a: string) (b: string) :=
- fun x =>
-    if( andb ( ( EnvMem "a" ), (EnvMem "b")) )
-    then update_env (envMem , "x", EnvMem "a")
-         update_env (envMem , "a", EnvMem "b")
-         update_env (envMem , "b", EnvMem "x")
-    else
-     val_error.
-
-
-Notation " 'swap' (a,b) " := (Swap a b) (at level 80).
-*)
-
-(*-------------------------Algoritmul de sortare---------------------*)
-
-(*
-Fixpoint Sort ( envv: EnvVect ) (vect : Vector) : Vector :=
-  fun y =>
-
- aici veific daca vectorul meu nu este gol si daca are mai mult de o valoare 
-retinuta in el
-  Apoi, daca cele 2 conditii sunt indeplinite ma folosesc de swap pentru a efectua sortarea
-*)
-
 
 (* Notatations used for the Big-Step semantics *)
 Reserved Notation "A =[ S , T ]=> N" (at level 30).
@@ -500,7 +444,7 @@ Inductive aeval : AExp -> EnvMem -> MemLayer -> TypeNat -> Prop :=
                                    | _ => error_nat
                                    end
 where "a =[ sigma , phi ]=> n" := (aeval a sigma phi n).
-
+ 
 Compute ((update_env env "x" (offset 9)) "x").
 Compute ((update_mem mlayer (offset 9) (val_nat 5)) (offset 9)).
 
@@ -636,36 +580,74 @@ Proof.
   reflexivity.
 Qed.
 
-
-Definition update (env : EnvValues) (x : string) (v : Values) : EnvValues :=
- fun y =>
-    if (eqb y x)  (*daca variabila x se gaseste prin environment, atunci updatez, daca nu, ramane la fel environmentul*)
-    then
-       (*variabila nu a fost declarata inca si valoarea pe care vreau sa o atribui nu e default*)
-       if(andb (types_compatibility var_undecl (env y)) (negb (types_compatibility default v)))
-        then var_undecl
-       else
-        (*variabila a fost doar declarata, acum avand tipul default si val de atribuit e tot default*)
-          if(andb (types_compatibility var_undecl (env y)) (types_compatibility default v))
-            then default
-          else
-              if(orb (types_compatibility default (env y)) (types_compatibility v (env y)))
-                then v
-              else var_assign (*daca valoarea de asignat nu are acelasi tip ca variabila*)
-    else (env y).
- 
-
 Reserved Notation "S -{ Sigma }-> Sigma'" (at level 60).
+Reserved Notation "S -{ Sigma , Phi }-> Phi'" (at level 60).
  
 
-(* 
-Inductive eval : Stmt -> EnvMem -> EnvMem -> MemLayer -> Prop :=
-| e_nat_decl: forall a i x sigma sigma' phi,
+Inductive eval : Stmt -> EnvMem -> MemLayer -> MemLayer -> Prop :=
+| e_nat_decl: forall a i x sigma phi phi',
    a =[ sigma , phi ]=> i ->
-   sigma' = (update sigma x (val_nat i)) ->
-   (x <n= a) -{ sigma , phi }-> sigma'
+   phi' = (update_mem phi (env x) var_undecl) ->
+   (LetNat x) -{ sigma , phi }-> phi'
+| e_nat_assign: forall a i x sigma phi phi',
+    a =[ sigma , phi ]=> i ->
+    phi' = (update_mem phi (env x) (val_nat i)) ->
+    (x <n= a) -{ sigma , phi }-> phi'
+| e_bool_decl: forall  a i x sigma phi phi',
+   a ={ sigma , phi }=> i ->
+   phi' = (update_mem phi (env x) var_undecl) ->
+   (LetBool x) -{ sigma , phi }-> phi'
 
-*)
+| e_bool_assign: forall  a i x sigma phi phi',
+    a ={ sigma , phi }=> i ->
+    phi' = (update_mem phi (env x) (val_bool i)) ->
+    (x <b= a) -{ sigma , phi }-> phi'
+
+|e_nat_decl_assign: forall a i x sigma phi phi',
+    a =[ sigma , phi ]=> i ->
+    phi' = (update_mem phi (env x) var_undecl) ->
+    phi' = (update_mem phi (env x) (val_nat i)) ->
+    (x DecNat= a) -{ sigma , phi }-> phi'
+
+(*| e_vector_decl: forall v i x sigma sigma' phi,
+    v =[ sigma , phi ]=> i ->
+    phi' = (update_env_vector phi x (val_nat i)) ->
+    (x <n= v) -{ sigma , phi}-> sigma' *)
+
+| e_seq : forall s1 s2 sigma phi phi1 phi2,
+    s1 -{ sigma , phi }-> phi1 ->
+    s2 -{ sigma , phi1 }-> phi2 ->
+    (s1 ;; s2) -{ sigma , phi }-> phi2
+| e_if_then : forall b s sigma phi, 
+    ifthen b s -{ sigma , phi }-> phi
+  
+| e_if_then_elsetrue : forall b s1 s2 sigma phi phi',
+    b ={ sigma , phi }=> true ->
+    s1 -{ sigma , phi }-> phi' ->
+    ifthenelse b s1 s2 -{ sigma , phi }-> phi' 
+| e_if_then_elsefalse : forall b s1 s2 sigma phi phi',
+    b ={ sigma, phi }=> false ->
+    s2 -{ sigma, phi }-> phi' -> 
+    ifthenelse b s1 s2 -{ sigma , phi }-> phi' 
+| e_whilefalse : forall b s sigma phi,
+    b ={ sigma , phi }=> false ->
+    while b s -{ sigma , phi }-> phi
+| e_whiletrue : forall b s sigma phi phi',
+    b ={ sigma , phi }=> true ->
+    (s ;; while b s) -{ sigma , phi }-> phi' ->
+    while b s -{ sigma , phi }-> phi'
+where "s -{ sigma , phi }-> phi'" := (eval s sigma phi phi').
+
+
+ 
+Example ex' : whilee ( "n" <' 3 ) { "n" <n= 3 } -{ env , mlayer }-> mlayer.
+Proof.
+  eapply e_whilefalse.
+  eapply b_lessthan.
+  - apply var.
+  - apply const.
+  - simpl. 
+Qed.
 
 
  
