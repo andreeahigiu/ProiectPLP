@@ -52,7 +52,8 @@ Inductive BExp :=
   | bgreaterthan : AExp -> AExp -> BExp
   | bnot : BExp -> BExp
   | band : BExp -> BExp -> BExp
-  | bor : BExp -> BExp -> BExp.
+  | bor : BExp -> BExp -> BExp
+  | bequal : AExp -> AExp -> BExp.
 
 
 Definition EnvGlobal := Values.
@@ -255,6 +256,7 @@ Notation "A >' B" := (bgreaterthan A B) (at level 70).
 Notation "!' A" := (bnot A)(at level 51, left associativity).
 Notation "A &&' B" := (band A B)(at level 52, left associativity).
 Notation "A ||' B" := (bor A B)(at level 53, left associativity).
+Notation "A =' B" := (bequal A B)(at level 70).
 
 (* Notatii pentru Statements *)
 Notation "X <n= A" := (nat_assign X A)(at level 60).
@@ -419,7 +421,7 @@ retinuta in el
 
 (* Notatations used for the Big-Step semantics *)
 Reserved Notation "A =[ S , T ]=> N" (at level 30).
-Reserved Notation "B ={ S }=> B'" (at level 70).
+Reserved Notation "B ={ S , T }=> B'" (at level 70).
  
 Definition plus_Nat (n1 n2 : TypeNat) : TypeNat :=
   match n1, n2 with 
@@ -502,10 +504,37 @@ where "a =[ sigma , phi ]=> n" := (aeval a sigma phi n).
 Compute ((update_env env "x" (offset 9)) "x").
 Compute ((update_mem mlayer (offset 9) (val_nat 5)) (offset 9)).
 
-Example ex0 : "x" =[ env , mlayer ]=> 5.
+Example ex0 : 5 =[ env , mlayer ]=> 5.
 Proof.
- .
+ apply const.
+Qed.
 
+Example ex1 : (4 +' 4) =[ env , mlayer ]=> 8.
+Proof.
+ eapply add.
+ apply const.
+ apply const.
+ simpl.
+ reflexivity.
+Qed.
+
+Example ex2 : (3 *' 3) =[ env, mlayer ]=> 9.
+Proof.
+  eapply multiplic.
+  apply const.
+  apply const.
+  simpl.
+  reflexivity.
+Qed.
+
+Example ex3 : (1 -' 5) =[ env , mlayer ]=> error_nat.
+Proof.
+  eapply substract.
+  apply const.
+  apply const.
+  simpl. 
+  reflexivity.
+Qed.
 
 Definition lt_Bool (n1 n2 : TypeNat) : TypeBool :=
   match n1, n2 with
@@ -534,47 +563,53 @@ Definition or_Bool (n1 n2 : TypeBool) : TypeBool :=
     | boolean v1, boolean v2 => boolean (orb v1 v2)
     end.
 
+Definition equal_Bool (n1 n2 : TypeNat) : TypeBool :=
+  match n1, n2 with
+    | error_nat, _ => error_bool
+    | _, error_nat => error_bool
+    | num v1, num v2 => boolean (Nat.eqb v1 v2)
+    end.
 
 (* Big-Step semantics for bool operations *)
-Inductive beval : BExp -> Env -> TypeBool -> Prop :=
-| b_error: forall sigma, berror  ={ sigma }=> error_bool
-| b_true : forall sigma, btrue ={ sigma }=> true
-| b_false : forall sigma, bfalse ={ sigma }=> false
-| b_var : forall v sigma, bvar v ={ sigma }=>  match (sigma v) with
+Inductive beval : BExp -> EnvMem -> MemLayer -> TypeBool -> Prop :=
+| b_error: forall sigma phi, berror  ={ sigma , phi }=> error_bool
+| b_true : forall sigma phi, btrue ={ sigma , phi }=> true
+| b_false : forall sigma phi, bfalse ={ sigma , phi }=> false
+| b_var : forall v sigma phi, bvar v ={ sigma , phi }=>  match (phi (sigma v)) with
                                                 | val_bool x => x
                                                 | _ => error_bool
                                                 end
-| b_lessthan : forall a1 a2 i1 i2 sigma b,
-    a1 =[ sigma ]=> i1 ->
-    a2 =[ sigma ]=> i2 ->
+| b_lessthan : forall a1 a2 i1 i2 sigma phi b,
+    a1 =[ sigma , phi ]=> i1 ->
+    a2 =[ sigma , phi ]=> i2 ->
     b = (lt_Bool i1 i2) ->
-    a1 <' a2 ={ sigma }=> b
-| b_not : forall a1 i1 sigma b,
-    a1 ={ sigma }=> i1 ->
+    a1 <' a2 ={ sigma , phi }=> b
+| b_not : forall a1 i1 sigma phi b,
+    a1 ={ sigma , phi }=> i1 ->
     b = (not_Bool i1) ->
-    !'a1 ={ sigma }=> b
-| b_and : forall a1 a2 i1 i2 sigma b,
-    a1 ={ sigma }=> i1 ->
-    a2 ={ sigma }=> i2 ->
+    !'a1 ={ sigma , phi }=> b
+| b_and : forall a1 a2 i1 i2 sigma phi b,
+    a1 ={ sigma , phi }=> i1 ->
+    a2 ={ sigma , phi }=> i2 ->
     b = (and_Bool i1 i2) ->
-    (a1 &&' a2) ={ sigma }=> b 
-| b_or : forall a1 a2 i1 i2 sigma b,
-    a1 ={ sigma }=> i1 ->
-    a2 ={ sigma }=> i2 ->
+    (a1 &&' a2) ={ sigma , phi }=> b 
+| b_or : forall a1 a2 i1 i2 sigma phi b,
+    a1 ={ sigma , phi }=> i1 ->
+    a2 ={ sigma , phi }=> i2 ->
     b = (or_Bool i1 i2) ->
-    (a1 ||' a2) ={ sigma }=> b 
-where "B ={ S }=> B'" := (beval B S B').
+    (a1 ||' a2) ={ sigma , phi }=> b 
+| b_equal : forall a1 a2 i1 i2 sigma phi b,
+    a1 =[ sigma , phi ]=> i1 ->
+    a2 =[ sigma , phi ]=> i2 ->
+    b = (equal_Bool i1 i2) ->
+    (a1 =' a2) ={ sigma , phi }=> b
+    
+where "B ={ S , T }=> B'" := (beval B S T B').
 
 
-Example substract_error : 1 -' 5 =[ env ]=> error_nat.
-Proof.
-  eapply substract.
-  - apply const.
-  - apply const.
-  - simpl. reflexivity.
-Qed.
 
-Example boolean_operation : bnot (100 <' "n") ={ env }=> error_bool.
+
+Example ex4: bnot (100 <' "n") ={ env , mlayer }=> error_bool.
 Proof.
   eapply b_not.
   eapply b_lessthan.
@@ -584,8 +619,25 @@ Proof.
   - simpl. reflexivity.
 Qed. 
 
+Example ex5: (10 =' 5) &&' ( 8 =' 8) ={ env , mlayer }=> (boolean false).
+Proof. 
+ eapply b_and.
+  eapply b_equal.
+  apply const.
+  apply const.
+  simpl.
+  reflexivity.
+  eapply b_equal.
+  apply const.
+  apply const.
+  simpl.
+  reflexivity.
+  simpl.
+  reflexivity.
+Qed.
 
-Definition update (env : Env) (x : string) (v : Values) : Env :=
+
+Definition update (env : EnvValues) (x : string) (v : Values) : EnvValues :=
  fun y =>
     if (eqb y x)  (*daca variabila x se gaseste prin environment, atunci updatez, daca nu, ramane la fel environmentul*)
     then
@@ -605,57 +657,15 @@ Definition update (env : Env) (x : string) (v : Values) : Env :=
 
 Reserved Notation "S -{ Sigma }-> Sigma'" (at level 60).
  
-Inductive eval : Stmt -> Env -> Env -> Prop :=
-| e_nat_decl: forall a i x sigma sigma',
-   a =[ sigma ]=> i ->
+
+(* 
+Inductive eval : Stmt -> EnvMem -> EnvMem -> MemLayer -> Prop :=
+| e_nat_decl: forall a i x sigma sigma' phi,
+   a =[ sigma , phi ]=> i ->
    sigma' = (update sigma x (val_nat i)) ->
-   (x <n= a) -{ sigma }-> sigma'
-| e_nat_assign: forall a i x sigma sigma',
-    a =[ sigma ]=> i ->
-    sigma' = (update sigma x (val_nat i)) ->
-    (x <n= a) -{ sigma }-> sigma'
-| e_bool_decl: forall a i x sigma sigma', 
-   a ={ sigma }=> i ->
-   sigma' = (update sigma x (val_bool i)) ->
-   (x <b= a) -{ sigma }-> sigma'
-| e_bool_assign: forall a i x sigma sigma',
-    a ={ sigma }=> i ->
-    sigma' = (update sigma x (val_bool i)) ->
-    (x <b= a) -{ sigma }-> sigma'
-|e_nat_decl_assign: forall a i x sigma sigma',
-    a =[sigma]=> i ->
-    sigma' = (update sigma x (val_nat i)) ->
-    (x <n= a) -{sigma }-> sigma'
+   (x <n= a) -{ sigma , phi }-> sigma'
 
-| e_vector_decl: forall v i x sigma sigma',
-    v =[sigma]=> i ->
-    sigma' = (update sigma x (val_nat i)) ->
-    (x <n= v) -{sigma}-> sigma'
-
-| e_seq : forall s1 s2 sigma sigma1 sigma2,
-    s1 -{ sigma }-> sigma1 ->
-    s2 -{ sigma1 }-> sigma2 ->
-    (s1 ;; s2) -{ sigma }-> sigma2
-| e_if_then : forall b s sigma,
-    ifthen b s -{ sigma }-> sigma
-| e_if_then_elsetrue : forall b s1 s2 sigma sigma',
-    b ={ sigma }=> true ->
-    s1 -{ sigma }-> sigma' ->
-    ifthenelse b s1 s2 -{ sigma }-> sigma' 
-| e_if_then_elsefalse : forall b s1 s2 sigma sigma',
-    b ={ sigma }=> false ->
-    s2 -{ sigma }-> sigma' ->
-    ifthenelse b s1 s2 -{ sigma }-> sigma' 
-| e_whilefalse : forall b s sigma,
-    b ={ sigma }=> false ->
-    while b s -{ sigma }-> sigma
-| e_whiletrue : forall b s sigma sigma',
-    b ={ sigma }=> true ->
-    (s ;; while b s) -{ sigma }-> sigma' ->
-    while b s -{ sigma }-> sigma'
-where "s -{ sigma }-> sigma'" := (eval s sigma sigma').
-
-
+*)
 
 
  
